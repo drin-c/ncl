@@ -1,0 +1,89 @@
+-----------------------写数据---------------------------
+ if(isfilepresent(outfile)) then
+     system("rm -rf "+outfile)
+  end if ;----如果文件已存在，先删除再写
+  fout = addfile(outfile,"c")
+  setfileoption(fout,"DefineMode",True)
+  fAtt = True
+  fAtt@title = "daily temperature from 1989-2015, data fusion on land CN05.1, APHRO_MA, and CMORPH"
+  fileattdef(fout,fAtt) ;----定义维度
+  dim_names = (/"time","lat","lon"/)
+  dim_sizes = (/-1    , nlat, nlon/)
+  dim_unlimited = (/True, False, False/)
+  filedimdef(fout,dim_names,dim_sizes,dim_unlimited)
+  filevardef(fout,"prcp","float",dim_names) ;----定义变量
+  filevardef(fout,"time",typeof(time),"time")
+  filevardef(fout,"lat" ,typeof(lat) ,"lat")
+  filevardef(fout,"lon" ,typeof(lon) ,"lon")
+  filevarattdef(fout,"time",time) ;----定义属性
+  filevarattdef(fout,"lat",lat)
+  filevarattdef(fout,"lon",lon)
+  fout->prcp@long_name = "daily temperature, 1989-2015" ;----自定义属性
+  fout->prcp@units = "K"
+  fout->prcp@_FillValue = -999.
+  setfileoption(fout,"DefineMode",False)
+  fout->lat = (/lat/) ;----赋值
+  fout->lon = (/lon/)
+  fout->prcp(iday,:,:) = (/prcp/)
+  fout->time(iday) = (/time(iday)/)
+  
+  --------------常用函数------------------------
+  cu_m=dim_avg_n_Wrap(cu,0) 
+  
+  
+  -----------------画图通用设置------------------
+  res=True
+  res@gsnFrame= False
+  res@gsnDraw= False
+  res@cnFillOn=True
+  res@cnLinesOn=False
+  res@cnLineLabelsOn=False
+  res@lbLabelBarOn= False
+  res@gsnLeftString=""
+  res@gsnRightString=""
+  res@mpLimitMode="LatLon"
+  res@mpCenterLonF = 180
+  res@gsnAddCyclic =False ;not a global data
+  
+  res@gsnCenterString="**"
+  
+       组图
+  pres=True
+  pres@gsnPanelRowSpec=True
+  pres@gsnPanelLabelBar=True
+  pres@lbLabelStride=2
+  pres@txString = "r95ptot difference"
+  gsn_panel(wks,plot,(/4,4,4/),pres)
+ --------------------非通用-------------------------
+ 
+ ······cn········
+ ···填色等级
+ res@cnLevelSelectionMode = "ExplicitLevels"
+ res@cnLevels = levs
+ ···
+   --------------------美化----------------------------
+   
+   ······字体字号设置········
+ txres@txFontHeightF = 0.013
+ 
+   ······画图后格外添加······
+   
+      1.自定义bar
+ txres               = True
+ txres@txFontHeightF = 0.013
+ txres@lgLabelFontHeightF = 0.06
+ txres@lgPerimOn              = False
+ txres@vpWidthF           = 0.07
+ txres@vpHeightF          = 0.03 ;bar的长宽
+ txres@lgDashIndexes      = (/0,0/)  
+ txres@lgLineThicknessF=(/2.0,2.0/)
+ txres@lgLineLabelFontThicknessF=(/1.5,1.5/)
+
+ txres@lgLineColors       = (/"black","red"/)
+ labels = (/" wrf"," obs"/) 
+ gsn_legend_ndc(wks,2,labels,0.05,0.39,txres)
+   
+      2.在cn内部添加额外信息
+ dum(0) = gsn_add_text(wks,plot(0),"r="+wrf_cor,lon({143}),lat({3}),txres) ;用经纬度控制text的位置
+ 
+  
