@@ -1,0 +1,108 @@
+------------------------------回归-------------------------
+;读数据
+f1=addfile("psum.nc","r")
+p=f1->pr_wtr
+data2 = asciiread("nino34.txt", (/50, 13/), "float")
+n= new((/50, 3/), float)
+  n(:,0) = data2(:,6)
+  n(:,1) = data2(:,7)
+  n(:,2) = data2(:,8)
+mm=ndtooned(n)
+;printVarSummary(pp) 73*144*150
+;print(mm)
+;回归
+  x_m    = new((/73, 144/), float)
+  tval_m = x_m
+  n_m    = x_m
+
+  x_m    = regCoef_n(mm, p, 0, 0) ;回归数据
+  tval_m = onedtond(x_m@tval, (/73, 144/))
+  n_m    = onedtond(x_m@nptxy-2, (/73, 144/))
+
+  copy_VarMeta(p(0,:,:), x_m)
+
+  ;t-检验
+  t_m = student_t(tval_m, n_m)
+  copy_VarMeta(p(0,:,:), t_m)
+  
+  ;显著性检验画图
+  resc@lbLabelBarOn              = False
+  resc@cnMonoFillPattern         = False
+  resc@cnLevelSelectionMode      = "ExplicitLevels"
+  resc@cnLevels                  = (/0.01/)             ; set to significance level
+  resc@cnFillPatterns            = (/6, -1/)            ; use "17" or "6"
+  resc@cnFillScaleF              = 0.7                  ; 该值越小点越密集
+  resc@cnFillPalette             = "gsltod"
+  resc@cnFillColors              = (/24, 0/)
+  resc@gsnCenterString=""
+  res_Reg@cnLevelSelectionMode = "ExplicitLevels"
+  ;levs=fspan(-2.5,2.5,11)
+  levs=fspan(-0.6,0.6,13)
+  res_Reg@cnLevels=levs
+  res_Reg@lbLabelStride=1
+  res_Reg@mpCenterLonF          = 180
+  plots_Reg = gsn_csm_contour_map(wks, x_m, res_Reg)
+  iplot = gsn_csm_contour(wks, t_m, resc)
+  overlay(plots_Reg, iplot)
+  draw(plots_Reg)
+  frame(wks)
+  
+  ---------------------------合成--------------------------
+  ;指数去趋势&标准化
+  ao_winter = dtrend(ao_winter, False)
+  AOI       = dim_standardize_n_Wrap(ao_winter, 0, 0)
+  
+  t2_clm  = clmMonTLL(t2)
+  t2a     = calcMonAnomTLL(t2, t2_clm) ;计算月距平
+  t2a_winter = dtrend_msg_n(t2a_winter&time, t2a_winter, False, False, 0) ;去趋势
+  
+   ; Composite Part
+  ;******************************************************************
+  ; AO
+  ; Positive phase
+  ao_positive = ind(AOI .gt. 0.5)    ; 大于0.5倍标准差的记录号
+  ao_num_p    = dimsizes(ao_positive)
+
+  t2_comp_ao_p   = dim_avg_n_Wrap(t2a_winter(ao_positive,:,:), 0)
+  tp_comp_ao_p   = dim_avg_n_Wrap(tpa_winter(ao_positive,:,:), 0)
+  u300_comp_ao_p = dim_avg_n_Wrap(u300a_winter(ao_positive,:,:), 0)
+  v300_comp_ao_p = dim_avg_n_Wrap(v300a_winter(ao_positive,:,:), 0)
+
+  ; Negative phase
+  ao_negative = ind(AOI .lt. -0.5)    ; 小于-0.5倍标准差的记录号
+  ao_num_n    = dimsizes(ao_negative)
+
+  t2_comp_ao_n   = dim_avg_n_Wrap(t2a_winter(ao_negative,:,:), 0)
+  tp_comp_ao_n   = dim_avg_n_Wrap(tpa_winter(ao_negative,:,:), 0)
+  u300_comp_ao_n = dim_avg_n_Wrap(u300a_winter(ao_negative,:,:), 0)
+  v300_comp_ao_n = dim_avg_n_Wrap(v300a_winter(ao_negative,:,:), 0)
+  
+  ;t检验
+   ; 2m temperature
+  t2_ao_p_std   = dim_variance_n_Wrap(t2a_winter(ao_positive,:,:), 0)             ; 计算方差
+  t2_ao_p_std   = sqrt(t2_ao_p_std/ao_num_p)                                      ; 计算标准差
+  t2_ao_p_std   = where(t2_ao_p_std .eq. 0, t2_ao_p_std@_FillValue, t2_ao_p_std)  ; Performs array assignments based on a conditional array (t2_ao_p_std@_FillValue means Missing Values)
+  t_t2_ao_p     = t2_comp_ao_p/t2_ao_p_std
+  confi_t2_ao_p = t2_comp_ao_p                                                    ; 传递元数据
+  confi_t2_ao_p = student_t(t_t2_ao_p, ao_num_p-1)                                ; Calculates the two-tailed probability of the Student-t distribution
+
+  t2_ao_n_std   = dim_variance_n_Wrap(t2a_winter(ao_negative,:,:), 0)
+  t2_ao_n_std   = sqrt(t2_ao_n_std/ao_num_n)
+  t2_ao_n_std   = where(t2_ao_n_std .eq. 0, t2_ao_n_std@_FillValue, t2_ao_n_std)
+  t_t2_ao_n     = t2_comp_ao_n/t2_ao_n_std
+  confi_t2_ao_n = t2_comp_ao_n
+  confi_t2_ao_n = student_t(t_t2_ao_n, ao_num_n-1)
+  
+  
+  --------------------eof---------------------
+   air_clm  = clmMonTLL(air)
+   air_ano     = calcMonAnomTLL(air, air_clm) ;月距平数据
+
+  x1   = air_ano({lat|-90:90}, {lon|0:360}, time|0:167)
+  neof = 1                                            
+  eof1 = eofunc_Wrap(x1, neof, False)
+  eof_ts1 = eofunc_ts_Wrap(x1, eof1, False)
+  eof_ts1 = dim_standardize_n_Wrap(eof_ts1, 0, 1)
+  stage1  = eof_ts1(0,:)
+  stage1_ave=runave(stage1,13,0)
+  
